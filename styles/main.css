@@ -14,6 +14,10 @@ body {
   height: 100vh;
 }
 
+/* ── Global utility ────────────────────────────────────────────── */
+.up  { color: rgba(255,255,255,0.9); }
+.dn  { color: rgba(255,255,255,0.38); }
+
 /* ── Loading ───────────────────────────────────────────────────── */
 #loading {
   position: fixed; inset: 0; background: #000;
@@ -66,9 +70,11 @@ body {
 #detail {
   position: fixed; bottom: 22px; left: 50%;
   transform: translateX(-50%) translateY(14px);
-  width: 420px; padding: 18px 20px; z-index: 100;
+  width: min(420px, calc(100vw - 40px)); padding: 18px 20px; z-index: 100;
   opacity: 0; pointer-events: none;
   transition: opacity 0.3s, transform 0.3s;
+  /* needed so the absolutely-positioned close button is contained here */
+  isolation: isolate;
 }
 #detail.on { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
 .det-row  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
@@ -92,19 +98,20 @@ body {
   z-index: 100; font-family: var(--mono); transition: all 0.2s;
 }
 #cam-btn:hover { background: rgba(255,255,255,0.09); color: #fff; }
+/* cam-wrap is position:fixed which makes it a containing block for absolute children */
 #cam-wrap { position: fixed; bottom: 22px; right: 20px; width: 170px; border-radius: 10px; overflow: hidden; z-index: 100; display: none; }
 #cam-feed { width: 100%; height: 128px; object-fit: cover; display: block; opacity: 0.45; transform: scaleX(-1); }
 #hand-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 128px; pointer-events: none; }
 .cam-bar { background: rgba(0,0,0,0.55); padding: 5px 8px; font-family: var(--mono); font-size: 7px; letter-spacing: 0.12em; color: rgba(255,255,255,0.35); }
 #gesture-label {
-  position: fixed; bottom: 168px; right: 20px; width: 170px; padding: 8px 12px;
+  position: fixed; bottom: 175px; right: 20px; width: 170px; padding: 8px 12px;
   text-align: center; font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em;
   color: rgba(255,255,255,0.7); opacity: 0; transition: opacity 0.25s; z-index: 100; border-radius: 8px;
 }
 #gesture-label.on { opacity: 1; }
 
 /* ── Controls hint ─────────────────────────────────────────────── */
-#hints { position: fixed; bottom: 22px; left: 20px; padding: 12px 14px; z-index: 100; }
+#hints { position: fixed; bottom: 80px; left: 20px; padding: 12px 14px; z-index: 100; }
 .hint { display: flex; align-items: center; gap: 9px; padding: 3px 0; }
 .hint-icon { font-size: 13px; width: 18px; }
 .hint-text { font-size: 9px; color: rgba(255,255,255,0.3); }

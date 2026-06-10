@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { camera } from './scene.js';
-import { CAM, state, allGroups } from './state.js';
+import { CAM, state } from './state.js';
 import { selectAsset, raycastAt } from './selection.js';
 
 // ── Full-screen cursor overlay ───────────────────────────────────────────────
@@ -26,13 +26,15 @@ const LOCK_FRAMES = 4;
 const palmBuf = [], vBuf = [];
 let prevSmPalm = null;
 
-// ── Dwell-select state ───────────────────────────────────────────────────────
-// When hovering an asset, the dwell ring anchors to the ASSET'S screen position
-// (not the hand), so normal hand tremor doesn't break the timer.
-let dwellAnchor = null;   // { nx, ny, sym } — asset screen position
-let dwellStart  = 0;
-const DWELL_MS     = 700;   // ms to hold
-const DWELL_RADIUS = 0.18;  // generous: 18% of screen width keeps hover alive
+// ── Frame-counter selection ───────────────────────────────────────────────────
+// Count how many consecutive frames the same asset is hovered.
+// A short "miss grace" prevents jitter from resetting the counter.
+// No position tracking needed — hover = raycast hit, that's all.
+let hoverTarget = null;
+let hoverFrames = 0;
+let missFrames  = 0;
+const HOVER_CONFIRM = 38;  // frames to confirm (~0.63 s at 60 fps)
+const MISS_GRACE    = 6;   // frames of missed raycast to tolerate
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function getPalmCenter(lm) {
@@ -56,7 +58,7 @@ function buf1D(buf, v, max) {
   return buf.reduce((s, x) => s + x, 0) / buf.length;
 }
 
-// Project an asset's 3D world position to normalised screen coords [0..1]
+// Project an asset group's world position to normalised screen [0..1]
 function projectAsset(group) {
   const wp = new THREE.Vector3();
   group.getWorldPosition(wp);
@@ -72,12 +74,22 @@ function clearHover() {
   state.hoveredGroup = null;
 }
 
+function resetHoverState() {
+  if (hoverTarget) clearHover();
+  hoverTarget = null;
+  hoverFrames = 0;
+  missFrames  = 0;
+}
+
 // ── Gesture classifier ───────────────────────────────────────────────────────
-// ✋ open palm (≥3 fingers) → orbit
-// ✌️ peace sign (index + middle) → zoom via finger spread
-// 👆 index only → point / dwell-select
+// ✋ open palm (≥3 fingers extended) → orbit
+// ✌️ peace sign (index + middle only) → zoom via spread
+// 👆 index only → point / select
 function classifyGesture(lm) {
-  const [,,,, , , indexMid,, indexTip,, midMid,, midTip,, ringMid,, ringTip,, pinkyMid,, pinkyTip] = lm;
+  const indexMid  = lm[6],  indexTip = lm[8];
+  const midMid    = lm[10], midTip   = lm[12];
+  const ringMid   = lm[14], ringTip  = lm[16];
+  const pinkyMid  = lm[18], pinkyTip = lm[20];
   const ext = [
     indexTip.y < indexMid.y  - 0.02,
     midTip.y   < midMid.y    - 0.02,
@@ -91,7 +103,7 @@ function classifyGesture(lm) {
 }
 
 // ── Cursor drawing ───────────────────────────────────────────────────────────
-function drawCursor(px, py, gesture, dwellProgress, assetPx, assetPy) {
+function drawCursor(px, py, gesture, dwellProgress, assetNx, assetNy) {
   cursorCtx.clearRect(0, 0, cursorCvs.width, cursorCvs.height);
   if (gesture === 'none') return;
 
@@ -100,43 +112,53 @@ function drawCursor(px, py, gesture, dwellProgress, assetPx, assetPy) {
   cursorCtx.save();
 
   if (gesture === 'point') {
-    // Hand crosshair at fingertip
-    cursorCtx.globalAlpha = 0.75;
+    // Small crosshair at fingertip
+    cursorCtx.globalAlpha = 0.7;
     cursorCtx.strokeStyle = '#fff';
     cursorCtx.lineWidth   = 1.2;
-    const len = 12;
+    const len = 10;
     cursorCtx.beginPath();
     cursorCtx.moveTo(sx - len, sy); cursorCtx.lineTo(sx + len, sy);
     cursorCtx.moveTo(sx, sy - len); cursorCtx.lineTo(sx, sy + len);
     cursorCtx.stroke();
 
-    // Dwell ring drawn at the ASSET position (stays put even if hand trembles)
-    if (dwellProgress > 0 && assetPx !== undefined) {
-      const ax = assetPx * cursorCvs.width;
-      const ay = assetPy * cursorCvs.height;
+    if (dwellProgress > 0 && assetNx !== undefined) {
+      // Progress ring locked to asset screen position
+      const ax = assetNx * cursorCvs.width;
+      const ay = assetNy * cursorCvs.height;
+
       // Background ring
-      cursorCtx.globalAlpha = 0.2;
+      cursorCtx.globalAlpha = 0.18;
       cursorCtx.beginPath();
-      cursorCtx.arc(ax, ay, 26, 0, Math.PI * 2);
+      cursorCtx.arc(ax, ay, 28, 0, Math.PI * 2);
       cursorCtx.strokeStyle = '#fff'; cursorCtx.lineWidth = 1;
       cursorCtx.stroke();
-      // Progress arc
+
+      // Coloured fill arc
       cursorCtx.globalAlpha = 0.9;
       cursorCtx.beginPath();
-      cursorCtx.arc(ax, ay, 26, -Math.PI / 2, -Math.PI / 2 + dwellProgress * Math.PI * 2);
-      cursorCtx.strokeStyle = '#fff'; cursorCtx.lineWidth = 2.5;
+      cursorCtx.arc(ax, ay, 28, -Math.PI / 2, -Math.PI / 2 + dwellProgress * Math.PI * 2);
+      cursorCtx.strokeStyle = '#fff'; cursorCtx.lineWidth = 3;
       cursorCtx.stroke();
+
+      // Tiny dot at asset centre when nearly done
+      if (dwellProgress > 0.5) {
+        cursorCtx.globalAlpha = dwellProgress * 0.6;
+        cursorCtx.beginPath();
+        cursorCtx.arc(ax, ay, 4, 0, Math.PI * 2);
+        cursorCtx.fillStyle = '#fff'; cursorCtx.fill();
+      }
     } else {
-      // Idle hint circle at finger
-      cursorCtx.globalAlpha = 0.25;
+      // Idle hint ring at fingertip
+      cursorCtx.globalAlpha = 0.2;
       cursorCtx.beginPath();
-      cursorCtx.arc(sx, sy, 22, 0, Math.PI * 2);
+      cursorCtx.arc(sx, sy, 20, 0, Math.PI * 2);
       cursorCtx.strokeStyle = '#fff'; cursorCtx.lineWidth = 1;
       cursorCtx.stroke();
     }
 
   } else if (gesture === 'zoom') {
-    cursorCtx.globalAlpha = 0.65;
+    cursorCtx.globalAlpha = 0.6;
     cursorCtx.beginPath();
     cursorCtx.arc(sx, sy, 22, 0, Math.PI * 2);
     cursorCtx.strokeStyle = '#fff'; cursorCtx.lineWidth = 1.2; cursorCtx.stroke();
@@ -145,9 +167,9 @@ function drawCursor(px, py, gesture, dwellProgress, assetPx, assetPy) {
     cursorCtx.fillStyle = '#fff'; cursorCtx.fill();
 
   } else {
-    cursorCtx.globalAlpha = 0.6;
+    cursorCtx.globalAlpha = 0.55;
     cursorCtx.beginPath();
-    cursorCtx.arc(sx, sy, 18, 0, Math.PI * 2);
+    cursorCtx.arc(sx, sy, 17, 0, Math.PI * 2);
     cursorCtx.strokeStyle = '#fff'; cursorCtx.lineWidth = 1; cursorCtx.stroke();
     cursorCtx.beginPath();
     cursorCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
@@ -159,9 +181,8 @@ function drawCursor(px, py, gesture, dwellProgress, assetPx, assetPy) {
 
 function setGestureLabel(g) {
   const el  = document.getElementById('gesture-label');
-  const map = { orbit: '✋  ORBITING', zoom: '✌️  ZOOMING — spread / close', point: '👆  POINT TO SELECT', none: '' };
-  el.textContent = map[g] ?? '';
-  el.classList.toggle('on', g !== 'none');
+  const map = { orbit: '✋  ORBITING', zoom: '✌️  ZOOMING', point: '👆  HOLD TO SELECT', none: '' };
+  if (el) { el.textContent = map[g] ?? ''; el.classList.toggle('on', g !== 'none'); }
 }
 
 // ── Main hand-results callback ───────────────────────────────────────────────
@@ -172,7 +193,6 @@ export function onHandResults(results) {
   ctx.clearRect(0, 0, hc.width, hc.height);
 
   if (!results.multiHandLandmarks?.length) {
-    // Coast inertia then restore auto-rotate
     orbitVX *= 0.88; orbitVY *= 0.88;
     if (Math.abs(orbitVX) > 0.0003 || Math.abs(orbitVY) > 0.0003) {
       CAM.tTheta += orbitVX;
@@ -180,7 +200,7 @@ export function onHandResults(results) {
     } else { orbitVX = orbitVY = 0; state.autoRotate = true; }
     activeGesture = pendingGesture = 'none'; pendingFrames = 0;
     prevSmPalm = null; palmBuf.length = vBuf.length = 0;
-    dwellAnchor = null; clearHover();
+    resetHoverState();
     setGestureLabel('none'); drawCursor(0, 0, 'none', 0);
     return;
   }
@@ -195,13 +215,13 @@ export function onHandResults(results) {
     ctx.restore();
   }
 
-  // Hysteresis: commit only after LOCK_FRAMES consecutive frames
+  // Hysteresis — commit gesture only after LOCK_FRAMES consecutive frames
   const raw = classifyGesture(lm);
   if (raw === pendingGesture) { pendingFrames = Math.min(pendingFrames + 1, LOCK_FRAMES + 5); }
   else { pendingGesture = raw; pendingFrames = 1; }
   if (pendingFrames >= LOCK_FRAMES && activeGesture !== pendingGesture) {
-    prevSmPalm = null; palmBuf.length = vBuf.length = 0; dwellAnchor = null;
-    if (activeGesture === 'point') clearHover();
+    prevSmPalm = null; palmBuf.length = vBuf.length = 0;
+    if (activeGesture === 'point') resetHoverState();
     activeGesture = pendingGesture;
   }
 
@@ -224,7 +244,7 @@ export function onHandResults(results) {
     prevSmPalm = { ...sm };
     drawCursor(sm.x, sm.y, 'orbit', 0);
 
-  // ── Zoom ✌️ — finger spread maps directly to camera distance ────
+  // ── Zoom ✌️ — finger spread maps directly to camera radius ────────
   } else if (activeGesture === 'zoom') {
     state.autoRotate = false; prevSmPalm = null;
     orbitVX *= 0.9; orbitVY *= 0.9;
@@ -236,9 +256,8 @@ export function onHandResults(results) {
     const my =     (lm[8].y + lm[12].y) / 2;
     drawCursor(mx, my, 'zoom', 0);
 
-  // ── Point + asset-anchored dwell select ─────────────────────────
+  // ── Point + frame-counter select ──────────────────────────────────
   } else if (activeGesture === 'point') {
-    // Coast remaining orbit inertia
     orbitVX *= 0.82; orbitVY *= 0.82;
     if (Math.abs(orbitVX) > 0.0005 || Math.abs(orbitVY) > 0.0005) {
       CAM.tTheta += orbitVX;
@@ -246,52 +265,40 @@ export function onHandResults(results) {
     } else { orbitVX = orbitVY = 0; state.autoRotate = false; }
     prevSmPalm = null;
 
-    // Smooth index fingertip position
-    const tip  = lm[8];
+    // Smooth fingertip
+    const tip   = lm[8];
     const smTip = buf2D(vBuf, { x: 1 - tip.x, y: tip.y }, 8);
 
-    // Raycast from fingertip
+    // Raycast
     const hit = raycastAt(smTip.x, smTip.y);
 
-    // Update hover highlight
-    if (hit !== state.hoveredGroup) {
-      clearHover();
-      state.hoveredGroup = hit;
-      if (hit && hit !== state.selected)
-        hit.userData.sphere.material.emissiveIntensity = 0.5;
-    }
+    if (hit) {
+      missFrames = 0;
 
-    const now = performance.now();
-    let dwellProgress = 0;
-
-    if (state.hoveredGroup) {
-      // Project the hovered asset to screen — anchor dwell there, not at hand
-      const { nx: aNx, ny: aNy } = projectAsset(state.hoveredGroup);
-      const sym = state.hoveredGroup.userData.asset.sym;
-
-      // Keep dwell alive as long as hand is anywhere within DWELL_RADIUS of the asset
-      const distToAsset = Math.hypot(smTip.x - aNx, smTip.y - aNy);
-      if (!dwellAnchor || dwellAnchor.sym !== sym) {
-        dwellAnchor = { nx: aNx, ny: aNy, sym };
-        dwellStart  = now;
-      } else if (distToAsset > DWELL_RADIUS) {
-        // Hand moved far away — reset
-        dwellAnchor = null;
-      }
-
-      if (dwellAnchor) {
-        dwellProgress = Math.min((now - dwellStart) / DWELL_MS, 1);
-        if (dwellProgress >= 1) {
-          selectAsset(state.hoveredGroup);
-          dwellAnchor = null;
+      if (hit === hoverTarget) {
+        // Same asset — advance counter
+        hoverFrames++;
+        if (hoverFrames >= HOVER_CONFIRM) {
+          selectAsset(hoverTarget);
+          resetHoverState();
         }
+      } else {
+        // New asset — reset counter onto new target
+        resetHoverState();
+        hoverTarget = hit;
+        hoverFrames = 1;
+        state.hoveredGroup = hit;
+        hit.userData.sphere.material.emissiveIntensity = 0.55;
       }
-
-      drawCursor(smTip.x, smTip.y, 'point', dwellProgress, aNx, aNy);
     } else {
-      dwellAnchor = null;
-      drawCursor(smTip.x, smTip.y, 'point', 0);
+      // Missed frame — tolerate MISS_GRACE before giving up
+      missFrames++;
+      if (missFrames > MISS_GRACE) resetHoverState();
     }
+
+    const progress = hoverTarget ? hoverFrames / HOVER_CONFIRM : 0;
+    const proj     = hoverTarget ? projectAsset(hoverTarget) : null;
+    drawCursor(smTip.x, smTip.y, 'point', progress, proj?.nx, proj?.ny);
 
   // ── Neutral / coasting ───────────────────────────────────────────
   } else {
@@ -300,7 +307,7 @@ export function onHandResults(results) {
       CAM.tTheta += orbitVX;
       CAM.tPhi = THREE.MathUtils.clamp(CAM.tPhi + orbitVY, 0.15, Math.PI - 0.15);
     } else { orbitVX = orbitVY = 0; state.autoRotate = true; }
-    prevSmPalm = null; dwellAnchor = null; clearHover();
+    prevSmPalm = null; resetHoverState();
     drawCursor(sm.x, sm.y, 'none', 0);
   }
 }

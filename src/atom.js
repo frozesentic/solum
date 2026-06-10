@@ -9,16 +9,50 @@ const stocks = ASSETS.filter(a => a.type === 'stock');
 const crypto = ASSETS.filter(a => a.type === 'crypto');
 const etfs   = ASSETS.filter(a => a.type === 'etf');
 
-function makeAsset(asset) {
-  const r     = assetRadius(asset.cap);
-  const group = new THREE.Group();
+// Subtle category tints — keep values close to 1 so the look stays professional/monochrome
+const TINTS = {
+  crypto:  new THREE.Color(1.06, 0.88, 0.58), // warm amber
+  ring0:   new THREE.Color(0.62, 0.80, 1.06), // steel blue  — Tech & Semis
+  ring1:   new THREE.Color(0.62, 1.06, 0.80), // mint green  — Finance & Commerce
+  ring2:   new THREE.Color(1.06, 0.72, 0.72), // soft rose   — Healthcare & Energy
+  etf:     new THREE.Color(0.82, 0.70, 1.06), // lavender    — ETFs
+};
 
-  const brightness = THREE.MathUtils.clamp(0.55 + asset.chg / 15, 0.3, 0.9);
+// Ring accent colors (hex) for orbital torus lines and CSS labels
+const RING_HEX = {
+  ring0: 0x99BBFF,
+  ring1: 0x88FFBB,
+  ring2: 0xFF9999,
+  etf:   0xBB99FF,
+};
+
+function getTint(asset) {
+  if (asset.type === 'crypto') return TINTS.crypto;
+  if (asset.type === 'etf')    return TINTS.etf;
+  return TINTS[`ring${asset.ring}`] ?? new THREE.Color(1, 1, 1);
+}
+
+function makeAsset(asset) {
+  const r    = assetRadius(asset.cap);
+  const group = new THREE.Group();
+  const tint  = getTint(asset);
+
+  const b = THREE.MathUtils.clamp(0.55 + asset.chg / 15, 0.3, 0.9);
+  // Blend: 82% neutral brightness + 18% category tint
+  const col = new THREE.Color(
+    THREE.MathUtils.clamp(b * (0.82 + tint.r * 0.18), 0, 1),
+    THREE.MathUtils.clamp(b * (0.82 + tint.g * 0.18), 0, 1),
+    THREE.MathUtils.clamp(b * (0.82 + tint.b * 0.18), 0, 1),
+  );
+  const emissiveCol = asset.chg > 0
+    ? new THREE.Color(tint.r * 0.07, tint.g * 0.07, tint.b * 0.07)
+    : new THREE.Color(0, 0, 0);
+
   const sphere = new THREE.Mesh(
     new THREE.SphereGeometry(r, 48, 48),
     new THREE.MeshPhysicalMaterial({
-      color:             new THREE.Color(brightness, brightness, brightness),
-      emissive:          asset.chg > 0 ? new THREE.Color(0.06, 0.06, 0.06) : new THREE.Color(0, 0, 0),
+      color:             col,
+      emissive:          emissiveCol,
       emissiveIntensity: Math.abs(asset.chg) * 0.25,
       transparent: true, opacity: 0.18,
       roughness: 0.04,   metalness: 0.06,
@@ -30,19 +64,25 @@ function makeAsset(asset) {
   group.add(sphere);
 
   // Wireframe shell
+  const wireColor = asset.chg > 0
+    ? new THREE.Color(tint.r * 0.8, tint.g * 0.8, tint.b * 0.8)
+    : new THREE.Color(0.33, 0.33, 0.33);
   group.add(new THREE.Mesh(
     new THREE.SphereGeometry(r * 1.004, 16, 16),
-    new THREE.MeshBasicMaterial({ color: asset.chg > 0 ? 0xffffff : 0x555555, wireframe: true, transparent: true, opacity: 0.06 })
+    new THREE.MeshBasicMaterial({ color: wireColor, wireframe: true, transparent: true, opacity: 0.07 })
   ));
 
   // Glow ring for movers > 2%
   if (Math.abs(asset.chg) > 2) {
+    const ringCol = asset.chg > 0
+      ? new THREE.Color(tint.r, tint.g, tint.b)
+      : new THREE.Color(0.55, 0.55, 0.55);
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(r * 1.5, 0.012, 6, 64),
       new THREE.MeshBasicMaterial({
-        color: asset.chg > 0 ? 0xffffff : 0x888888,
+        color: ringCol,
         transparent: true,
-        opacity: Math.min(0.45, Math.abs(asset.chg) * 0.07),
+        opacity: Math.min(0.5, Math.abs(asset.chg) * 0.07),
       })
     );
     ring.rotation.x = Math.PI * (0.2 + Math.random() * 0.6);
@@ -67,13 +107,16 @@ function makeAsset(asset) {
   return group;
 }
 
-// Floating ring label (CSS2D, placed at the 12-o'clock position of the torus)
-function makeRingLabel(text, radius, pivot) {
+// Floating ring label (CSS2D) — colored to match the category accent
+function makeRingLabel(text, radius, pivot, hexColor) {
+  const r = (hexColor >> 16 & 0xff).toString(16).padStart(2, '0');
+  const g = (hexColor >>  8 & 0xff).toString(16).padStart(2, '0');
+  const b = (hexColor       & 0xff).toString(16).padStart(2, '0');
   const div = document.createElement('div');
   div.style.cssText = `
     font-family: 'JetBrains Mono', monospace;
-    font-size: 8px; letter-spacing: 0.18em; color: rgba(255,255,255,0.22);
-    pointer-events: none; white-space: nowrap; text-transform: uppercase;`;
+    font-size: 8px; letter-spacing: 0.18em; color: #${r}${g}${b};
+    opacity: 0.55; pointer-events: none; white-space: nowrap; text-transform: uppercase;`;
   div.textContent = text;
   const lbl = new CSS2DObject(div);
   lbl.position.set(radius + 1.5, 0.4, 0);
@@ -117,9 +160,9 @@ export function buildAtom() {
 
   // Three tilted stock orbital rings — assets grouped by ring field in data
   const orbitDefs = [
-    { radius: 13, tiltX:  Math.PI * 0.28, tiltZ:  Math.PI * 0.08,  speed: 0.045, ringId: 0, label: 'Tech & Semis'          },
-    { radius: 15, tiltX: -Math.PI * 0.22, tiltZ:  Math.PI * 0.20,  speed: 0.035, ringId: 1, label: 'Finance & Commerce'     },
-    { radius: 14, tiltX:  Math.PI * 0.12, tiltZ: -Math.PI * 0.28,  speed: 0.055, ringId: 2, label: 'Healthcare & Energy'    },
+    { radius: 13, tiltX:  Math.PI * 0.28, tiltZ:  Math.PI * 0.08,  speed: 0.045, ringId: 0, label: 'Tech & Semis',       hex: RING_HEX.ring0 },
+    { radius: 15, tiltX: -Math.PI * 0.22, tiltZ:  Math.PI * 0.20,  speed: 0.035, ringId: 1, label: 'Finance & Commerce',  hex: RING_HEX.ring1 },
+    { radius: 14, tiltX:  Math.PI * 0.12, tiltZ: -Math.PI * 0.28,  speed: 0.055, ringId: 2, label: 'Healthcare & Energy', hex: RING_HEX.ring2 },
   ];
 
   orbitDefs.forEach((def) => {
@@ -130,10 +173,10 @@ export function buildAtom() {
 
     pivot.add(new THREE.Mesh(
       new THREE.TorusGeometry(def.radius, 0.018, 4, 128),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.055 })
+      new THREE.MeshBasicMaterial({ color: def.hex, transparent: true, opacity: 0.09 })
     ));
 
-    makeRingLabel(def.label, def.radius, pivot);
+    makeRingLabel(def.label, def.radius, pivot, def.hex);
 
     const slice = stocks.filter(a => a.ring === def.ringId);
     const assetArr = [];
@@ -159,10 +202,10 @@ export function buildAtom() {
 
   etfPivot.add(new THREE.Mesh(
     new THREE.TorusGeometry(22, 0.02, 4, 128),
-    new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.045 })
+    new THREE.MeshBasicMaterial({ color: RING_HEX.etf, transparent: true, opacity: 0.09 })
   ));
 
-  makeRingLabel('ETFs', 22, etfPivot);
+  makeRingLabel('ETFs', 22, etfPivot, RING_HEX.etf);
 
   const etfArr = [];
   etfs.forEach((asset, i) => {
