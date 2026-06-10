@@ -1,0 +1,130 @@
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  background: #000;
+  color: #fff;
+  font-family: var(--sans);
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── Loading ───────────────────────────────────────────────────── */
+#loading {
+  position: fixed; inset: 0; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 1000; transition: opacity 0.8s ease;
+}
+#loading.out { opacity: 0; pointer-events: none; }
+.load-logo { font-family: var(--mono); font-size: 11px; font-weight: 400; letter-spacing: 0.5em; color: rgba(255,255,255,0.6); margin-bottom: 36px; }
+.load-track { width: 180px; height: 1px; background: rgba(255,255,255,0.08); position: relative; overflow: hidden; }
+.load-fill  { position: absolute; left: 0; top: 0; height: 100%; background: #fff; width: 0; transition: width 0.35s ease; box-shadow: 0 0 12px rgba(255,255,255,0.9); }
+.load-msg   { margin-top: 18px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: rgba(255,255,255,0.25); }
+
+/* ── Header ────────────────────────────────────────────────────── */
+#hdr { position: fixed; top: 0; left: 0; right: 0; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; z-index: 100; pointer-events: none; }
+.hdr-logo { font-family: var(--mono); font-size: 12px; letter-spacing: 0.4em; color: rgba(255,255,255,0.85); }
+.hdr-sub  { font-size: 9px; letter-spacing: 0.12em; color: rgba(255,255,255,0.25); margin-top: 3px; }
+.hdr-time { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.25); letter-spacing: 0.06em; }
+
+/* ── Glass panel ───────────────────────────────────────────────── */
+.panel {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 12px;
+}
+.panel-title { font-size: 8px; font-weight: 600; letter-spacing: 0.18em; color: rgba(255,255,255,0.3); text-transform: uppercase; margin-bottom: 12px; }
+
+/* ── Market overview ───────────────────────────────────────────── */
+#overview { position: fixed; top: 72px; left: 20px; width: 190px; padding: 14px 16px; z-index: 100; }
+.mstat { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.mstat:last-child { border-bottom: none; }
+.mstat-name { font-size: 10px; color: rgba(255,255,255,0.4); }
+.mstat-val  { font-family: var(--mono); font-size: 10px; }
+.mstat-val.up   { color: #fff; }
+.mstat-val.down { color: rgba(255,255,255,0.35); }
+
+/* ── Filter tabs ───────────────────────────────────────────────── */
+#filters { position: fixed; top: 50%; right: 20px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 100; }
+.ftab {
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 20px;
+  font-size: 8px; letter-spacing: 0.12em; color: rgba(255,255,255,0.35); cursor: pointer;
+  text-transform: uppercase; text-align: center; transition: all 0.2s;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-family: var(--mono);
+}
+.ftab:hover, .ftab.on { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #fff; }
+
+/* ── Asset detail ──────────────────────────────────────────────── */
+#detail {
+  position: fixed; bottom: 22px; left: 50%;
+  transform: translateX(-50%) translateY(14px);
+  width: 420px; padding: 18px 20px; z-index: 100;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+}
+#detail.on { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+.det-row  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.det-sym  { font-family: var(--mono); font-size: 22px; font-weight: 500; letter-spacing: 0.04em; }
+.det-name { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 3px; }
+.det-price{ font-family: var(--mono); font-size: 20px; font-weight: 300; text-align: right; }
+.det-chg  { font-size: 11px; font-weight: 500; text-align: right; margin-top: 3px; }
+.det-chg.up { color: #fff; }
+.det-chg.dn { color: rgba(255,255,255,0.35); }
+.det-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.det-cell { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; padding: 7px 10px; }
+.det-cell-label { font-size: 7px; color: rgba(255,255,255,0.25); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+.det-cell-val   { font-family: var(--mono); font-size: 11px; }
+#sparkline { width: 100%; height: 38px; display: block; }
+
+/* ── Camera ────────────────────────────────────────────────────── */
+#cam-btn {
+  position: fixed; bottom: 22px; right: 20px; padding: 9px 14px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+  color: rgba(255,255,255,0.6); font-size: 10px; letter-spacing: 0.06em; cursor: pointer;
+  z-index: 100; font-family: var(--mono); transition: all 0.2s;
+}
+#cam-btn:hover { background: rgba(255,255,255,0.09); color: #fff; }
+#cam-wrap { position: fixed; bottom: 22px; right: 20px; width: 170px; border-radius: 10px; overflow: hidden; z-index: 100; display: none; }
+#cam-feed { width: 100%; height: 128px; object-fit: cover; display: block; opacity: 0.45; transform: scaleX(-1); }
+#hand-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 128px; pointer-events: none; }
+.cam-bar { background: rgba(0,0,0,0.55); padding: 5px 8px; font-family: var(--mono); font-size: 7px; letter-spacing: 0.12em; color: rgba(255,255,255,0.35); }
+#gesture-label {
+  position: fixed; bottom: 168px; right: 20px; width: 170px; padding: 8px 12px;
+  text-align: center; font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.7); opacity: 0; transition: opacity 0.25s; z-index: 100; border-radius: 8px;
+}
+#gesture-label.on { opacity: 1; }
+
+/* ── Controls hint ─────────────────────────────────────────────── */
+#hints { position: fixed; bottom: 22px; left: 20px; padding: 12px 14px; z-index: 100; }
+.hint { display: flex; align-items: center; gap: 9px; padding: 3px 0; }
+.hint-icon { font-size: 13px; width: 18px; }
+.hint-text { font-size: 9px; color: rgba(255,255,255,0.3); }
+
+/* ── Asset labels (CSS2D) ──────────────────────────────────────── */
+.alabel { pointer-events: auto; cursor: pointer; text-align: center; }
+.alabel .sym { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.05em; color: rgba(255,255,255,0.88); text-shadow: 0 0 12px rgba(255,255,255,0.4); white-space: nowrap; }
+.alabel .prc { font-family: var(--mono); font-size: 8px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+.alabel .chg { font-size: 8px; font-weight: 600; margin-top: 1px; }
+.alabel .chg.up { color: rgba(255,255,255,0.85); }
+.alabel .chg.dn { color: rgba(255,255,255,0.3); }
+
+/* ── Screen effects ────────────────────────────────────────────── */
+body::after {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px);
+  pointer-events: none; z-index: 50;
+}
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%);
+  pointer-events: none; z-index: 49;
+}

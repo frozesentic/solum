@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOLUM · Market Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/main.css">
+
+  <!-- MediaPipe Hands CDN globals -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <!-- Three.js importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three":          "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+      "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="load-logo">SOLUM · MARKET INTELLIGENCE</div>
+    <div class="load-track"><div class="load-fill" id="loading-bar"></div></div>
+    <div class="load-msg" id="loading-info">INITIALIZING...</div>
+  </div>
+
+  <!-- Header -->
+  <header id="hdr">
+    <div>
+      <div class="hdr-logo">SOLUM</div>
+      <div class="hdr-sub">MARKET INTELLIGENCE</div>
+    </div>
+    <div>
+      <span id="asset-count" style="font-size:9px;letter-spacing:.1em;color:rgba(255,255,255,.25);">— assets</span>
+    </div>
+    <div class="hdr-time" id="clock">—</div>
+  </header>
+
+  <!-- Market overview panel -->
+  <div id="overview" class="panel">
+    <div class="panel-title">MARKET OVERVIEW</div>
+    <div class="mstat"><span class="mstat-name">S&amp;P 500</span><span class="mstat-val up">+1.23%</span></div>
+    <div class="mstat"><span class="mstat-name">NASDAQ</span><span class="mstat-val up">+0.87%</span></div>
+    <div class="mstat"><span class="mstat-name">CRYPTO</span><span class="mstat-val down">−2.14%</span></div>
+    <div class="mstat"><span class="mstat-name">ETF AVG</span><span class="mstat-val up">+0.44%</span></div>
+    <div id="market-stats" style="margin-top:10px;font-size:8px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+  </div>
+
+  <!-- Filter tabs -->
+  <div id="filters">
+    <button class="ftab on" data-filter="all">ALL</button>
+    <button class="ftab" data-filter="stock">STOCKS</button>
+    <button class="ftab" data-filter="crypto">CRYPTO</button>
+    <button class="ftab" data-filter="etf">ETF</button>
+  </div>
+
+  <!-- Asset detail panel -->
+  <div id="detail" class="panel">
+    <button id="d-close" style="position:absolute;top:12px;right:14px;background:none;border:none;color:rgba(255,255,255,.35);font-size:13px;cursor:pointer;padding:4px;">✕</button>
+    <div class="det-row">
+      <div>
+        <div class="det-sym" id="d-sym">—</div>
+        <div class="det-name" id="d-name">—</div>
+      </div>
+      <div>
+        <div class="det-price" id="d-price">—</div>
+        <div class="det-chg" id="d-chg">—</div>
+      </div>
+    </div>
+    <canvas id="sparkline"></canvas>
+    <div class="det-grid" style="margin-top:10px;">
+      <div class="det-cell"><div class="det-cell-label">Market Cap</div><div class="det-cell-val" id="d-cap">—</div></div>
+      <div class="det-cell"><div class="det-cell-label">Type</div><div class="det-cell-val" id="d-type">—</div></div>
+      <div class="det-cell"><div class="det-cell-label">Sector</div><div class="det-cell-val" id="d-sector">—</div></div>
+    </div>
+  </div>
+
+  <!-- Camera UI -->
+  <button id="cam-btn">ENABLE HAND CONTROL</button>
+  <div id="cam-wrap">
+    <video id="cam-feed" playsinline muted></video>
+    <canvas id="hand-canvas"></canvas>
+    <div class="cam-bar" id="cam-status">LOADING…</div>
+  </div>
+  <div id="gesture-label"></div>
+
+  <!-- Controls hint -->
+  <div id="hints" class="panel">
+    <div class="hint"><span class="hint-icon">✋</span><span class="hint-text">Open palm — orbit</span></div>
+    <div class="hint"><span class="hint-icon">✌️</span><span class="hint-text">Peace sign — zoom</span></div>
+    <div class="hint"><span class="hint-icon">👆</span><span class="hint-text">Point &amp; hold — select</span></div>
+  </div>
+
+  <!-- Entry point -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
