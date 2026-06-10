@@ -23,7 +23,7 @@ runLoadingSequence(() => {
 });
 
 // ── Auto-rotate speed ────────────────────────────────────────────────────────
-const AUTO_SPEED = 0.0006;
+const AUTO_SPEED = 0.00018;
 
 // ── Main animation loop ──────────────────────────────────────────────────────
 function animate() {
